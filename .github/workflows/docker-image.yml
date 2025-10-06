@@ -1,0 +1,46 @@
+name: Deploy Telegram-bot
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ env.SERVER_SSH_KEY }}
+
+      - name: Copy source code to server
+        uses: appleboy/scp-action@v0.1.6
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ env.SERVER_SSH_KEY }}
+          port: 22
+          source: "."
+          target: "~/telgram_ai_bot/"
+
+      - name: Build and deploy Docker container on server
+        run: |
+          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST << EOF
+            cd ~/telgram_ai_bot
+            sudo docker build -t telgram_ai_bot .
+            if docker ps -a --format '{{.Names}}' | grep -Eq '^telgram_ai_bot-container$'; then
+              sudo docker stop telgram_ai_bot-container
+              sudo docker rm telgram_ai_bot-container
+            fi
+            sudo docker run -d --name telgram_ai_bot-container -p 5005:5005 --restart=always telgram_ai_bot
+          EOF
