@@ -616,17 +616,11 @@ async def chat_handler(message: Message):
             f"Стоимость: ${cost:.6f}"
         )
         
-        # Сохраняем в историю
-        db.add_message(user_id, "user", message.text)
-        db.add_message(user_id, "assistant", answer)
-        db.update_stats(user_id, input_tokens, output_tokens, cost)
-        
         formatted_answer = markdown_to_html(answer)
         
         # Разбиваем умным способом
         message_parts = smart_split_message(formatted_answer, max_length=4096)
 
-        
         # Отправляем части
         if len(message_parts) > 1:
             for i, part in enumerate(message_parts, 1):
@@ -635,7 +629,6 @@ async def chat_handler(message: Message):
         else:
             await message.answer(formatted_answer, parse_mode=ParseMode.HTML)
             logger.info(f"Ответ отправлен пользователю {user_id}")
-        
 
     except requests.exceptions.Timeout:
         logger.error(f"Timeout при запросе к API для пользователя {user_id}")
@@ -649,7 +642,11 @@ async def chat_handler(message: Message):
         logger.error(f"Неожиданная ошибка в chat_handler для пользователя {user_id}: {e}", exc_info=True)
         await message.answer("❌ Произошла непредвиденная ошибка. Наша команда уже уведомлена, и мы постараемся всё исправить как можно скорее.")
 
-
+    finally:
+        # Сохраняем в историю
+        db.add_message(user_id, "user", message.text)
+        db.add_message(user_id, "assistant", answer)
+        db.update_stats(user_id, input_tokens, output_tokens, cost)
 
 async def main():
     logger.info("="*50)
