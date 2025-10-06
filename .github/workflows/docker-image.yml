@@ -13,16 +13,16 @@ jobs:
       SERVER_HOST: ${{ secrets.SERVER_HOST }}
       SERVER_USER: ${{ secrets.SERVER_USER }}
       SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      
       - name: Setup SSH key
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ env.SERVER_SSH_KEY }}
-
+      
       - name: Copy source code to server
         uses: appleboy/scp-action@v0.1.6
         with:
@@ -32,15 +32,34 @@ jobs:
           port: 22
           source: "."
           target: "~/telgram_ai_bot/"
-
+      
       - name: Build and deploy Docker container on server
         run: |
-          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST << EOF
+          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST << 'EOF'
             cd ~/telgram_ai_bot
-            sudo docker build -t telgram_ai_bot .
-            if docker ps -a --format '{{.Names}}' | grep -Eq '^telgram_ai_bot-container$'; then
-              sudo docker stop telgram_ai_bot-container
-              sudo docker rm telgram_ai_bot-container
+            
+            # Останавливаем и удаляем старый контейнер (если существует)
+            if sudo docker ps -a --format '{{.Names}}' | grep -Eq '^telgram_ai_bot-container$'; then
+              echo "Stopping and removing existing container..."
+              sudo docker stop telgram_ai_bot-container || true
+              sudo docker rm telgram_ai_bot-container || true
             fi
+            
+            # Удаляем старый образ (опционально, освобождает место)
+            if sudo docker images | grep -q telgram_ai_bot; then
+              echo "Removing old image..."
+              sudo docker rmi telgram_ai_bot || true
+            fi
+            
+            # Собираем новый образ
+            echo "Building new image..."
+            sudo docker build -t telgram_ai_bot .
+            
+            # Запускаем новый контейнер
+            echo "Starting new container..."
             sudo docker run -d --name telgram_ai_bot-container -p 5005:5005 --restart=always telgram_ai_bot
+            
+            # Проверяем статус
+            echo "Container status:"
+            sudo docker ps | grep telgram_ai_bot-container
           EOF
