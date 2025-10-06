@@ -1,7 +1,4 @@
 aiogram
 requests
-asyncio
-dotenv
-sqlite
-datetime
-html
+python-dotenv
+html5lib
